@@ -1,47 +1,81 @@
-import json
+import mysql.connector
 import difflib
 
-data = json.load(open("data.json"))
+con = mysql.connector.connect(
+user = "ardit700_student",
+password = "ardit700_student",
+host = "108.167.140.122",
+database = "ardit700_pm1database"
+)
 
+def convert(tuple, dictionary):
+    for word, meaning in tuple:
+        dictionary.setdefault(word, []).append(meaning)
+    return dictionary
 
-def dictionary(word):
-    if (word.upper() in data):
-        return data[word.upper()]
-    if (word.title() in data):
-        return data[word.title()]
+def wordSuggestion(word, cursor):
+    firstChar = word[0]
+    lastChar = word[len(word) - 1]
+    cursor.execute("SELECT * FROM Dictionary WHERE Expression LIKE '%s' OR Expression LIKE '%s'" %(firstChar + '%', '%' + lastChar))
     
-    word = word.lower()
-    if (word in data):
-        return data[word]
-    else:
-        try:
-            closest = difflib.get_close_matches(word, data.keys(), 1, 0.7)[0]
-            return ["don't enter if", closest]
-        except IndexError:
-            return "This word isnt in the dictionary"
+    result = cursor.fetchall()
+
+    dictionary = {}    
+    dictionary = convert(result, dictionary)
+
+    closest = difflib.get_close_matches(word, dictionary.keys(), 1, 0.7)
+
+
+    if (closest):
+        return ['suggestion' , closest[0], dictionary[closest[0]]]
+
+    return []
+
+
+
+def getDefinition(word, cursor):
+    cursor.execute("SELECT * FROM Dictionary WHERE Expression = '%s'" %word)
+
+    result = cursor.fetchall()
+    if result:
+        dictionary = {}
+        dictionary = convert(result, dictionary)
+        return ['ok', word, dictionary[word]]
+
+    result = wordSuggestion(word, cursor)
+    
+    return result
+
+def printDefinition(definitions):
+    definitionNumber = 0
+    for i in definitions:
+        definitionNumber += 1
+        print(str(definitionNumber) + ". " + i)
+
 
 while True:
     word = input("What word are you searching? press ':Q' to exit\n")
-
-    if (word == ":Q"):
+    cursor = con.cursor()
+    
+    if (word.lower() == ":q"):
         break
-    else:
-        dictionary(word)
-        meaning = dictionary(word)
-        if (type(meaning) == list and meaning[0] != "don't enter if"):
-            for i in meaning:
-                print(i)
-        elif (meaning[0] == "don't enter if"):
-            print("Did you mean '%s'?" %meaning[1])
-            ans = input("If it is, please type 'y', else type 'n'")
-            if ans == "y":
-                meaning = dictionary(meaning[1])
-                for i in meaning:
-                    print(i)
-            elif ans == "n":
-                print("This word isn't in the dictionary")
+    
+    definitions = getDefinition(word, cursor)
+
+    if (definitions):
+        
+        if (definitions[0] == "ok"):
+            printDefinition(definitions[2])
+
+        elif(definitions[0] == 'suggestion'):
+            print("Did you mean '%s'?" %definitions[1])
+            ans = input("If so, please type 'y', if not type 'n'\n")
+            if (ans.lower() == "y"):
+                printDefinition(definitions[2])
             else:
-                print("We didn't understand your entry")
-        else:
-            print(meaning)
-        print("\n")
+                print("This word isn't in the dictionary")
+    
+    else:
+        print("Word not found")
+
+    print("\n")
